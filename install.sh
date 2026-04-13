@@ -223,7 +223,7 @@ fi
 echo ""
 echo -e "${BOLD}Step 4: Utility scripts${NC}"
 
-for script in compile.sh lint.sh query.sh bootstrap.sh; do
+for script in compile.sh lint.sh query.sh bootstrap.sh sync-claude-md.sh; do
   if [ -f "$SOURCE_DIR/scripts/$script" ]; then
     cp "$SOURCE_DIR/scripts/$script" "$PROJECT_ROOT/scripts/wiki/$script"
     chmod +x "$PROJECT_ROOT/scripts/wiki/$script"
@@ -280,48 +280,18 @@ else
   echo "    Run scripts directly: bash scripts/wiki/lint.sh"
 fi
 
-# ---------- 6. Update CLAUDE.md ----------
+# ---------- 6. Update CLAUDE.md (dynamic, based on actual wiki structure) ----------
 
 echo ""
 echo -e "${BOLD}Step 6: CLAUDE.md reference${NC}"
 
-CLAUDEMD="$PROJECT_ROOT/CLAUDE.md"
-if [ -f "$CLAUDEMD" ]; then
-  if grep -q "wiki" "$CLAUDEMD" 2>/dev/null; then
-    echo -e "  ${GREEN}✓ CLAUDE.md already references wiki${NC}"
-  else
-    # Prepend wiki reference after the first heading
-    python3 -c "
-with open('$CLAUDEMD') as f:
-    content = f.read()
-
-wiki_ref = '''
-## 📚 Project Wiki (Self-Updating Knowledge Base)
-
-**Location:** \`.wiki/\` — Karpathy-method compiled wiki. Use \`/wiki-query <topic>\` to search, \`/wiki-update\` to refresh.
-- **L1 context** (\`.wiki/l1-context/\`) — Always-loaded: overview, architecture, conventions, commands, active work, issues, glossary
-- **L2 reference** (\`.wiki/l2-reference/\`) — On-demand deep dives: architecture, features, API, patterns, infrastructure, decisions
-'''
-
-# Insert after first line (# heading)
-lines = content.split('\n')
-for i, line in enumerate(lines):
-    if line.startswith('# ') and i == 0:
-        lines.insert(i + 1, wiki_ref)
-        break
-else:
-    lines.insert(0, wiki_ref)
-
-with open('$CLAUDEMD', 'w') as f:
-    f.write('\n'.join(lines))
-
-print('  Added wiki reference to CLAUDE.md')
-" 2>/dev/null && echo -e "  ${GREEN}✓ Wiki reference added to CLAUDE.md${NC}" || {
-      echo -e "  ${YELLOW}⚠ Could not update CLAUDE.md. Add manually.${NC}"
-    }
-  fi
+SYNC_SCRIPT="$PROJECT_ROOT/scripts/wiki/sync-claude-md.sh"
+if [ -f "$SYNC_SCRIPT" ]; then
+  bash "$SYNC_SCRIPT" --project-root "$PROJECT_ROOT" && \
+    echo -e "  ${GREEN}✓ CLAUDE.md synced with actual wiki structure${NC}" || \
+    echo -e "  ${YELLOW}⚠ sync-claude-md.sh failed. Run manually: bash scripts/wiki/sync-claude-md.sh${NC}"
 else
-  echo -e "  ${YELLOW}· No CLAUDE.md found. Create one with /wiki-update --bootstrap${NC}"
+  echo -e "  ${YELLOW}⚠ sync-claude-md.sh not found — CLAUDE.md not updated${NC}"
 fi
 
 # ---------- Done ----------
