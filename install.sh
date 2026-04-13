@@ -142,67 +142,79 @@ echo -e "  ${GREEN}✓ session-end.sh (save session knowledge)${NC}"
 echo -e "  ${GREEN}✓ pre-compact.sh (protect from context compression)${NC}"
 
 # Wire hooks into .claude/settings.json
+# Format: each event is an ARRAY of { matcher, hooks[] } objects
+# command is a single string (not command + args)
 SETTINGS_FILE="$PROJECT_ROOT/.claude/settings.json"
+
+WIKI_HOOKS='{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/wiki/hooks/session-start.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/wiki/hooks/pre-compact.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/wiki/hooks/session-end.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "prompt_input_exit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/wiki/hooks/session-end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}'
+
 if [ -f "$SETTINGS_FILE" ]; then
-  # Merge hooks into existing settings using python
+  # Merge hooks into existing settings
   python3 -c "
 import json, sys
 
 with open('$SETTINGS_FILE') as f:
     settings = json.load(f)
 
-hooks = settings.get('hooks', {})
+wiki_hooks = json.loads('''$WIKI_HOOKS''')
+settings['hooks'] = wiki_hooks['hooks']
 
-hooks['SessionStart'] = {
-    'startup': [{'type': 'command', 'command': 'bash', 'args': ['scripts/wiki/hooks/session-start.sh']}],
-    'compact': [{'type': 'command', 'command': 'bash', 'args': ['scripts/wiki/hooks/pre-compact.sh']}]
-}
-hooks['SessionEnd'] = {
-    'clear': [{'type': 'command', 'command': 'bash', 'args': ['scripts/wiki/hooks/session-end.sh']}],
-    'prompt_input_exit': [{'type': 'command', 'command': 'bash', 'args': ['scripts/wiki/hooks/session-end.sh']}]
-}
-
-settings['hooks'] = hooks
-
+# Preserve any other existing settings
 with open('$SETTINGS_FILE', 'w') as f:
     json.dump(settings, f, indent=2)
-
-print('  Merged hooks into existing settings.json')
+    f.write('\n')
 " 2>/dev/null && echo -e "  ${GREEN}✓ Hooks merged into .claude/settings.json${NC}" || {
     echo -e "  ${YELLOW}⚠ Could not merge. Creating new settings.json${NC}"
-    # Fallback: create new
-    cat > "$SETTINGS_FILE" << 'HOOKJSON'
-{
-  "hooks": {
-    "SessionStart": {
-      "startup": [{"type": "command", "command": "bash", "args": ["scripts/wiki/hooks/session-start.sh"]}],
-      "compact": [{"type": "command", "command": "bash", "args": ["scripts/wiki/hooks/pre-compact.sh"]}]
-    },
-    "SessionEnd": {
-      "clear": [{"type": "command", "command": "bash", "args": ["scripts/wiki/hooks/session-end.sh"]}],
-      "prompt_input_exit": [{"type": "command", "command": "bash", "args": ["scripts/wiki/hooks/session-end.sh"]}]
-    }
-  }
-}
-HOOKJSON
+    mkdir -p "$(dirname "$SETTINGS_FILE")"
+    echo "$WIKI_HOOKS" > "$SETTINGS_FILE"
     echo -e "  ${GREEN}✓ Created .claude/settings.json with hooks${NC}"
   }
 else
   mkdir -p "$(dirname "$SETTINGS_FILE")"
-  cat > "$SETTINGS_FILE" << 'HOOKJSON'
-{
-  "hooks": {
-    "SessionStart": {
-      "startup": [{"type": "command", "command": "bash", "args": ["scripts/wiki/hooks/session-start.sh"]}],
-      "compact": [{"type": "command", "command": "bash", "args": ["scripts/wiki/hooks/pre-compact.sh"]}]
-    },
-    "SessionEnd": {
-      "clear": [{"type": "command", "command": "bash", "args": ["scripts/wiki/hooks/session-end.sh"]}],
-      "prompt_input_exit": [{"type": "command", "command": "bash", "args": ["scripts/wiki/hooks/session-end.sh"]}]
-    }
-  }
-}
-HOOKJSON
+  echo "$WIKI_HOOKS" > "$SETTINGS_FILE"
   echo -e "  ${GREEN}✓ Created .claude/settings.json${NC}"
 fi
 
