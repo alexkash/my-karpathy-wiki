@@ -2,10 +2,25 @@
 set -euo pipefail
 
 # Session Start hook: Read L1 context + last daily log, output JSON systemMessage
-# Resolves paths relative to script location (../../ from hooks/)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WIKI_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Search upward for .wiki/ directory (works both in repo and after install)
+WIKI_ROOT=""
+dir="$SCRIPT_DIR"
+while [ "$dir" != "/" ]; do
+  if [ -d "$dir/.wiki" ]; then
+    WIKI_ROOT="$dir"
+    break
+  fi
+  dir="$(dirname "$dir")"
+done
+
+if [ -z "$WIKI_ROOT" ]; then
+  echo "{}"
+  exit 0
+fi
+
 L1_DIR="$WIKI_ROOT/.wiki/l1-context"
 LOG_DIR="$WIKI_ROOT/.wiki/log/daily"
 
@@ -62,15 +77,15 @@ if [ -n "$last_log" ] && [ -s "$last_log" ]; then
 fi
 
 # Output JSON using python3
-python3 << 'EOF'
+# Pass temp file path via argv (python3 - arg << 'EOF' syntax)
+python3 - "$COMBINED_TEMP" << 'EOF'
 import json
 import sys
 
-# Read combined content
 try:
   with open(sys.argv[1], 'r') as f:
     combined = f.read()
-except:
+except Exception:
   combined = ""
 
 output = {
@@ -78,4 +93,3 @@ output = {
 }
 print(json.dumps(output, ensure_ascii=False))
 EOF
-"$COMBINED_TEMP"

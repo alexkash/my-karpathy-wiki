@@ -6,7 +6,23 @@ set -euo pipefail
 # Outputs {} on stdout
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WIKI_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Search upward for .wiki/ directory (works both in repo and after install)
+WIKI_ROOT=""
+dir="$SCRIPT_DIR"
+while [ "$dir" != "/" ]; do
+  if [ -d "$dir/.wiki" ]; then
+    WIKI_ROOT="$dir"
+    break
+  fi
+  dir="$(dirname "$dir")"
+done
+
+if [ -z "$WIKI_ROOT" ]; then
+  echo "{}"
+  exit 0
+fi
+
 LOG_DIR="$WIKI_ROOT/.wiki/log/daily"
 
 # Create log directory if it doesn't exist
@@ -19,18 +35,15 @@ if [ -z "$input" ]; then
   exit 0
 fi
 
-# Extract transcript_path using python3
-transcript_path=$(python3 << 'EOF'
-import json
-import sys
-
+# Extract transcript_path — pipe input via stdin, not sys.argv
+transcript_path=$(echo "$input" | python3 -c "
+import json, sys
 try:
-  data = json.loads(sys.argv[1])
-  print(data.get('transcript_path', ''))
-except:
-  print('')
-EOF
-"$input")
+    data = json.load(sys.stdin)
+    print(data.get('transcript_path', ''))
+except Exception:
+    print('')
+")
 
 # If no transcript path, exit cleanly
 if [ -z "$transcript_path" ] || [ ! -f "$transcript_path" ]; then
@@ -42,7 +55,8 @@ fi
 MESSAGES_TEMP=$(mktemp)
 trap "rm -f $MESSAGES_TEMP" EXIT
 
-python3 << 'EOF'
+# Pass file paths via argv (python3 - arg1 arg2 << 'EOF' syntax)
+python3 - "$transcript_path" "$MESSAGES_TEMP" << 'EOF'
 import json
 import sys
 from datetime import datetime
@@ -60,7 +74,7 @@ try:
       try:
         msg = json.loads(line)
         messages.append(msg)
-      except:
+      except Exception:
         pass
 
   # Keep last 30 messages (user + assistant pairs)
@@ -82,7 +96,6 @@ except Exception as e:
   with open(output_file, 'w') as out:
     out.write(f'Error: {str(e)}\n')
 EOF
-"$transcript_path" "$MESSAGES_TEMP"
 
 # Get today's date
 TODAY=$(date +%Y-%m-%d)

@@ -137,6 +137,40 @@ npm run wiki:compile:all       # Compile all unprocessed
 bash scripts/wiki/bootstrap.sh # Re-scaffold (non-destructive)
 ```
 
+## Updating an Existing Installation
+
+If you've already installed the wiki and want to pull in hook/script fixes without touching your wiki content:
+
+### Option A: Re-run the installer (recommended)
+
+```bash
+cd your-project
+curl -fsSL https://raw.githubusercontent.com/alexkash/my-karpathy-wiki/main/install.sh | bash
+```
+
+The installer detects that `.wiki/` already exists and **skips wiki content** — it only updates hooks, scripts, and Claude Code commands.
+
+### Option B: Copy hooks manually
+
+```bash
+# From a local clone of this repo:
+cp hooks/session-start.sh your-project/scripts/wiki/hooks/
+cp hooks/session-end.sh   your-project/scripts/wiki/hooks/
+cp hooks/pre-compact.sh   your-project/scripts/wiki/hooks/
+```
+
+### What gets updated vs. preserved
+
+| Component | Updated | Preserved |
+|-----------|---------|-----------|
+| `scripts/wiki/hooks/*.sh` | ✅ | — |
+| `scripts/wiki/*.sh` | ✅ | — |
+| `.claude/commands/wiki-*.md` | ✅ | — |
+| `.wiki/WIKI.md` (schema) | ✅ | — |
+| `.wiki/l1-context/*.md` | — | ✅ |
+| `.wiki/l2-reference/**` | — | ✅ |
+| `.wiki/log/` | — | ✅ |
+
 ## Requirements
 
 - bash 4.0+
